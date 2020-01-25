@@ -1,0 +1,20 @@
+[package]
+name = "polyfuse-tests"
+version = "0.0.0" # never publish
+publish = false
+authors = ["Yusuke Sasaki <yusuke.sasaki.nuem@gmail.com>"]
+edition = "2018"
+
+[dev-dependencies]
+anyhow = "1"
+futures = "0.3"
+mimicaw = "0.1.1"
+polyfuse = { path = "../polyfuse" }
+polyfuse-tokio = { path = "../polyfuse-tokio" }
+tempfile = "3"
+tokio = { version = "0.2", features = [ "full" ] }
+
+[[test]]
+name = "test_integration"
+path = "tests/test_integration.rs"
+harness = false
