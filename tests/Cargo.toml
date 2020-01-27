@@ -8,7 +8,8 @@ edition = "2018"
 [dev-dependencies]
 anyhow = "1"
 futures = "0.3"
-maybe-unwind = "0.1"
+libc = "0.2"
+maybe-unwind = "0.1.1"
 mimicaw = "0.1.2"
 polyfuse = { path = "../polyfuse" }
 polyfuse-tokio = { path = "../polyfuse-tokio" }
@@ -17,5 +18,5 @@ tokio = { version = "0.2", features = [ "full" ] }
 
 [[test]]
 name = "test_integration"
-path = "tests/test_integration.rs"
+path = "tests/test_integration/main.rs"
 harness = false

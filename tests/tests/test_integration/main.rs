@@ -2,8 +2,13 @@ use futures::future::Future;
 use maybe_unwind::FutureMaybeUnwindExt as _;
 use mimicaw::{Args, Outcome, Test};
 use polyfuse::Filesystem;
-use std::{io, panic::UnwindSafe, path::PathBuf};
+use std::{
+    io,
+    panic::{AssertUnwindSafe, UnwindSafe},
+};
 use tokio::task;
+
+mod root;
 
 fn wrap_test_case<F>(fut: F) -> Box<dyn FnMut() -> task::JoinHandle<Outcome>>
 where
@@ -15,13 +20,7 @@ where
         task::spawn(async move {
             match fut.await {
                 Ok(()) => Outcome::passed(),
-                Err(unwind) => {
-                    let msg = match unwind.location() {
-                        Some(loc) => format!("[{}] {}", loc, unwind.payload_str()),
-                        None => unwind.payload_str().to_string(),
-                    };
-                    Outcome::failed().error_message(msg)
-                }
+                Err(unwind) => Outcome::failed().error_message(unwind.to_string()),
             }
         })
     })
@@ -31,7 +30,7 @@ struct TestFs;
 
 impl Filesystem for TestFs {}
 
-#[tokio::main]
+#[tokio::main(basic_scheduler)]
 async fn main() -> anyhow::Result<()> {
     maybe_unwind::set_hook();
 
@@ -48,10 +47,18 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    let tests = vec![Test::test(
-        "case1",
-        wrap_test_case(case1(mountpoint.path().to_owned())),
-    )];
+    macro_rules! test_suite {
+        ($($path:path),*$(,)?) => {
+            vec![$(
+                Test::test(
+                    stringify!($path),
+                    wrap_test_case(AssertUnwindSafe($path(mountpoint.path().to_owned()))),
+                ),
+            )*]
+        }
+    }
+
+    let tests = test_suite![root::stat,];
 
     let status = mimicaw::run_tests(
         &args,
@@ -67,8 +74,4 @@ async fn main() -> anyhow::Result<()> {
     fs.await??;
 
     status.exit()
-}
-
-async fn case1(_mountpoint: PathBuf) {
-    assert!(false, "explicit assertion fail");
 }
