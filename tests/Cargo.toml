@@ -8,7 +8,8 @@ edition = "2018"
 [dev-dependencies]
 anyhow = "1"
 futures = "0.3"
-mimicaw = "0.1.1"
+maybe-unwind = "0.1"
+mimicaw = "0.1.2"
 polyfuse = { path = "../polyfuse" }
 polyfuse-tokio = { path = "../polyfuse-tokio" }
 tempfile = "3"
