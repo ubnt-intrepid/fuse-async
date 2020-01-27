@@ -3,6 +3,14 @@ use mimicaw::{Args, Outcome, Test};
 use std::panic::UnwindSafe;
 use tokio::task;
 
+macro_rules! e {
+    ($e:expr) => {{
+        #[allow(clippy::let_and_return)]
+        let e = $e;
+        e
+    }};
+}
+
 mod fs;
 mod root;
 
