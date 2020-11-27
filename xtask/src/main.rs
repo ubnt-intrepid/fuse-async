@@ -130,32 +130,35 @@ fn do_doc() -> anyhow::Result<()> {
 }
 
 fn do_coverage() -> anyhow::Result<()> {
-    if cargo()
-        .args(&["tarpaulin", "--version"])
-        .run_silent()
-        .is_err()
-    {
-        eprintln!("[cargo-xtask] cargo-tarpaulin is not installed");
+    if Command::new("grcov").arg("--version").run_silent().is_err() {
+        eprintln!("[cargo-xtask] grcov is not installed");
         return Ok(());
     }
 
-    let cov_dir = target_dir().join("cov");
-    if cov_dir.exists() {
-        fs::remove_dir_all(&cov_dir)?;
-    }
-    fs::create_dir_all(&cov_dir)?;
+    let project_root = project_root();
+    let target_dir = target_dir();
+    let cov_dir = target_dir.join("cov");
+    let profraw_file = cov_dir.join("polyfuse-%p-%m.profraw");
 
+    // Ref: https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/source-based-code-coverage.html
+    println!("[cargo-xtask] Run instrumented tests...");
     cargo()
-        .arg("tarpaulin")
-        .arg("-v")
+        .arg("test")
         .arg("--workspace")
-        .arg("--out")
-        .arg("Xml")
-        .arg("--output-dir")
-        .arg(&cov_dir)
-        .arg("--target-dir")
-        .arg(&cov_dir)
+        .env("CARGO_BUILD_RUSTFLAGS", "-Zinstrument-coverage")
+        .env("LLVM_PROFILE_FILE", &profraw_file)
         .run()?;
+
+    let mut grcov = Command::new("grcov");
+    grcov.arg(&project_root);
+    grcov.arg("--binary-path").arg(target_dir.join("debug"));
+    grcov.arg("--source-dir").arg(&project_root);
+    grcov.arg("--output-type").arg("lcov");
+    grcov.arg("--branch");
+    grcov.arg("--ignore-not-existing");
+    grcov.arg("--ignore").arg("/*");
+    grcov.arg("--output-path").arg(cov_dir.join("lcov.info"));
+    grcov.run()?;
 
     Ok(())
 }

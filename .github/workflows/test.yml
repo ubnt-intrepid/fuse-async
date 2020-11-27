@@ -13,7 +13,7 @@ env:
 
 jobs:
   Test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v1 # FIXME: upgrade to v2
       with:
@@ -22,13 +22,14 @@ jobs:
     - name: Install APT dependencies
       run: |
         sudo apt-get update -yqq
-        sudo apt-get install -yqq --no-install-recommends fuse
+        sudo apt-get install -yqq --no-install-recommends fuse libtinfo6
 
     - name: Install Rust toolchains
       run: |
         rustup set profile minimal
         rustup install stable beta nightly
         rustup component add rustfmt clippy --toolchain stable
+        rustup component add llvm-tools-preview --toolchain nightly
 
     - name: Generate Cargo.lock
       run: cargo generate-lockfile
@@ -64,20 +65,16 @@ jobs:
       run: cargo +nightly test
       continue-on-error: true
 
-    - name: Install cargo-tarpaulin
-      run: |
-        curl -L https://github.com/xd009642/tarpaulin/releases/download/0.10.0/cargo-tarpaulin-0.10.0-travis.tar.gz | tar zxf -
-        mkdir -pv $HOME/.cargo/bin
-        mv -v ./cargo-tarpaulin $HOME/.cargo/bin
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+    - name: Install grcov
+      run: cargo install --debug grcov
 
     - name: Run coverage test
-      run: cargo +stable xtask coverage
+      run: cargo +nightly xtask coverage
       continue-on-error: true
 
     - name: Send report to Codecov
-      uses: codecov/codecov-action@v1.0.3
+      uses: codecov/codecov-action@v1
       if: success()
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./target/cov/cobertura.xml
+        file: ./target/cov/lcov.info
