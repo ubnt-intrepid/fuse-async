@@ -29,6 +29,7 @@ jobs:
         rustup set profile minimal
         rustup install stable beta nightly
         rustup component add rustfmt clippy --toolchain stable
+        rustup component add llvm-tools-preview --toolchain nightly
 
     - name: Generate Cargo.lock
       run: cargo generate-lockfile
