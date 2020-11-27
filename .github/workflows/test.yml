@@ -64,15 +64,11 @@ jobs:
       run: cargo +nightly test
       continue-on-error: true
 
-    - name: Install cargo-tarpaulin
-      run: |
-        curl -L https://github.com/xd009642/tarpaulin/releases/download/0.10.0/cargo-tarpaulin-0.10.0-travis.tar.gz | tar zxf -
-        mkdir -pv $HOME/.cargo/bin
-        mv -v ./cargo-tarpaulin $HOME/.cargo/bin
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+    - name: Install rustfilt
+      run: cargo install --debug rustfilt
 
     - name: Run coverage test
-      run: cargo +stable xtask coverage
+      run: cargo +nightly xtask coverage
       continue-on-error: true
 
     - name: Send report to Codecov
