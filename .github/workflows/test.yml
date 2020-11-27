@@ -65,19 +65,19 @@ jobs:
       run: cargo +nightly test
       continue-on-error: true
 
-  - name: Cache LLVM and Clang
-    id: cache-llvm
-    uses: actions/cache@v2
-    with:
-      path: ${{ runner.temp }}/llvm
-      key: llvm-11.0
+    - name: Cache LLVM and Clang
+      id: cache-llvm
+      uses: actions/cache@v2
+      with:
+        path: ${{ runner.temp }}/llvm
+        key: llvm-11.0
 
-  - name: Install LLVM
-    uses: KyleMayes/install-llvm-action@v1
-    with:
-      version: "11.0"
-      directory: ${{ runner.temp }}/llvm
-      cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+    - name: Install LLVM
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "11.0"
+        directory: ${{ runner.temp }}/llvm
+        cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
     - name: Install rustfilt
       run: cargo install --debug rustfilt
