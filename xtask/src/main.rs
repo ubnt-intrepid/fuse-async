@@ -203,7 +203,7 @@ fn build_instrumented_tests() -> anyhow::Result<Vec<PathBuf>> {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
-        .env("RUSTFLAGS", "-Zinstrument-coverage")
+        .env("CARGO_BUILD_RUSTFLAGS", "-Zinstrument-coverage")
         .env("CARGO_TERM_PROGRESS_WHEN", "never")
         .spawn()
         .context("Failed to spawn cargo command")?;
