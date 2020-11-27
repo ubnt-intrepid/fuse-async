@@ -87,7 +87,7 @@ jobs:
       continue-on-error: true
 
     - name: Send report to Codecov
-      uses: codecov/codecov-action@v1.0.3
+      uses: codecov/codecov-action@v1
       if: success()
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
