@@ -13,7 +13,7 @@ env:
 
 jobs:
   Test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v1 # FIXME: upgrade to v2
       with:
@@ -22,7 +22,7 @@ jobs:
     - name: Install APT dependencies
       run: |
         sudo apt-get update -yqq
-        sudo apt-get install -yqq --no-install-recommends fuse
+        sudo apt-get install -yqq --no-install-recommends fuse libtinfo6
 
     - name: Install Rust toolchains
       run: |
