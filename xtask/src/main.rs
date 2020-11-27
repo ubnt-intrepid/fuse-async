@@ -183,7 +183,7 @@ fn do_coverage() -> anyhow::Result<()> {
             .arg("-show-instantiations")
             .arg(format!("-instr-profile={}", profdata_file.display()))
             .arg(format!("-output-dir={}", report_dir.display()))
-            .arg("-format=html")
+            .arg("-format=text")
             .arg(test)
             .run()?;
     }
@@ -192,7 +192,7 @@ fn do_coverage() -> anyhow::Result<()> {
 }
 
 fn build_instrumented_tests() -> anyhow::Result<Vec<PathBuf>> {
-    use miniserde::json::{self, Value};
+    use json::JsonValue;
     use std::io::{BufRead as _, BufReader};
 
     let mut child = cargo()
@@ -214,9 +214,9 @@ fn build_instrumented_tests() -> anyhow::Result<Vec<PathBuf>> {
     let mut executables = vec![];
     for line in stdout.lines() {
         if let Ok(line) = line {
-            if let Ok(line) = json::from_str(line.trim_end()) {
-                if let Value::Object(obj) = line {
-                    if let Some(Value::String(ref executable)) = obj.get("executable") {
+            if let Ok(line) = json::parse(line.trim_end()) {
+                if let JsonValue::Object(obj) = line {
+                    if let Some(JsonValue::String(ref executable)) = obj.get("executable") {
                         executables.push(PathBuf::from(executable));
                     }
                 }

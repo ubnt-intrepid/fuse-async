@@ -91,4 +91,4 @@ jobs:
       if: success()
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./target/cov/cobertura.xml
+        directory: ./target/cov/
