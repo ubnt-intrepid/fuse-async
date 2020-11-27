@@ -22,7 +22,8 @@ jobs:
     - name: Install APT dependencies
       run: |
         sudo apt-get update -yqq
-        sudo apt-get install -yqq --no-install-recommends fuse
+        sudo add-apt-repository -y "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-11 main"
+        sudo apt-get install -yqq --no-install-recommends fuse llvm
 
     - name: Install Rust toolchains
       run: |

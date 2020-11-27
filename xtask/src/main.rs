@@ -167,7 +167,7 @@ fn do_coverage() -> anyhow::Result<()> {
             .run()?;
 
         println!("[cargo-xtask] Collect coverage profile for {}", test_name);
-        Command::new("rust-profdata")
+        Command::new("llvm-profdata")
             .arg("merge")
             .arg("-sparse")
             .arg(&profraw_file)
