@@ -130,34 +130,103 @@ fn do_doc() -> anyhow::Result<()> {
 }
 
 fn do_coverage() -> anyhow::Result<()> {
-    if cargo()
-        .args(&["tarpaulin", "--version"])
-        .run_silent()
-        .is_err()
-    {
-        eprintln!("[cargo-xtask] cargo-tarpaulin is not installed");
-        return Ok(());
-    }
+    // Ref: https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/source-based-code-coverage.html
+
+    const BLACKLIST: &[&str] = &[
+        "polyfuse_example_basic", //
+        "polyfuse_example_hello",
+    ];
+
+    println!("[cargo-xtask] Build instrumented tests...");
+    let tests = build_instrumented_tests()?;
 
     let cov_dir = target_dir().join("cov");
-    if cov_dir.exists() {
-        fs::remove_dir_all(&cov_dir)?;
-    }
-    fs::create_dir_all(&cov_dir)?;
 
-    cargo()
-        .arg("tarpaulin")
-        .arg("-v")
-        .arg("--workspace")
-        .arg("--out")
-        .arg("Xml")
-        .arg("--output-dir")
-        .arg(&cov_dir)
-        .arg("--target-dir")
-        .arg(&cov_dir)
-        .run()?;
+    for test in &tests {
+        let test_name = test
+            .file_stem()
+            .context("no file name")?
+            .to_str()
+            .context("invalid file stem")?;
+
+        if BLACKLIST.iter().any(|prefix| test_name.starts_with(prefix)) {
+            println!("[cargo-xtask] Skip coverage test of {}", test_name);
+            continue;
+        }
+
+        let profraw_file = cov_dir.join(format!("{}.profraw", test_name));
+        let profdata_file = cov_dir.join(format!("{}.profdata", test_name));
+        let report_dir = cov_dir.join("report").join(test_name);
+
+        // Run instrumented test
+        Command::new(&test)
+            .stdin(Stdio::null())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .env("LLVM_PROFILE_FILE", &profraw_file)
+            .run()?;
+
+        println!("[cargo-xtask] Collect coverage profile for {}", test_name);
+        Command::new("rust-profdata")
+            .arg("merge")
+            .arg("-sparse")
+            .arg(&profraw_file)
+            .arg("-o")
+            .arg(&profdata_file)
+            .run()?;
+
+        println!("[cargo-xtask] Create coverage report");
+        Command::new("llvm-cov")
+            .arg("show")
+            .arg("-Xdemangler=rustfilt")
+            .arg("-show-line-counts-or-regions")
+            .arg("-show-instantiations")
+            .arg(format!("-instr-profile={}", profdata_file.display()))
+            .arg(format!("-output-dir={}", report_dir.display()))
+            .arg("-format=html")
+            .arg(test)
+            .run()?;
+    }
 
     Ok(())
+}
+
+fn build_instrumented_tests() -> anyhow::Result<Vec<PathBuf>> {
+    use miniserde::json::{self, Value};
+    use std::io::{BufRead as _, BufReader};
+
+    let mut child = cargo()
+        .arg("test")
+        .arg("--no-run")
+        .arg("--workspace")
+        .arg("--message-format=json")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .env("RUSTFLAGS", "-Zinstrument-coverage")
+        .env("CARGO_TERM_PROGRESS_WHEN", "never")
+        .spawn()
+        .context("Failed to spawn cargo command")?;
+
+    let stdout = child.stdout.take().context("stdout is not set")?;
+    let stdout = BufReader::new(stdout);
+
+    let mut executables = vec![];
+    for line in stdout.lines() {
+        if let Ok(line) = line {
+            if let Ok(line) = json::from_str(line.trim_end()) {
+                if let Value::Object(obj) = line {
+                    if let Some(Value::String(ref executable)) = obj.get("executable") {
+                        executables.push(PathBuf::from(executable));
+                    }
+                }
+            }
+        }
+    }
+
+    child.wait_timeout(Duration::from_millis(10))?;
+
+    Ok(executables)
 }
 
 fn cargo() -> Command {
