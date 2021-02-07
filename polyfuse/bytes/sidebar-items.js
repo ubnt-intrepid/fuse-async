@@ -1,0 +1,1 @@
+initSidebarItems({"trait":[["Bytes","A trait that represents a collection of bytes."],["FillBytes","The container of scattered bytes."]]});
