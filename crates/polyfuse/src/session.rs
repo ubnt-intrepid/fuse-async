@@ -347,6 +347,11 @@ impl Session {
         })
     }
 
+    /// Return the expected buffer size for recv_request
+    pub fn req_buffer_size(&self) -> usize {
+        self.inner.bufsize - mem::size_of::<fuse_in_header>()
+    }
+
     /// Return whether the kernel supports for zero-message opens.
     ///
     /// When the returned value is `true`, the kernel treat an `ENOSYS`
@@ -364,6 +369,52 @@ impl Session {
         self.inner.init_out.flags & FUSE_NO_OPENDIR_SUPPORT != 0
     }
 
+    /// Return the request after reading it in the given buffer
+    ///
+    /// The given buffer should have capacity of expected size
+    pub fn recv_request(&self, arg: &mut Arc<Vec<u8>>) -> io::Result<Option<Request>> {
+        let mut conn = &self.inner.conn;
+        let mut header = fuse_in_header::default();
+        if arg.capacity() < self.req_buffer_size() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "recv_request buffer size too small",
+            ));
+        }
+        let len = loop {
+            match conn.read_vectored(&mut [
+                io::IoSliceMut::new(&mut header.as_bytes_mut()),
+                io::IoSliceMut::new(&mut Arc::get_mut(arg).unwrap()[..]),
+            ]) {
+                Ok(len) => {
+                    if len < mem::size_of::<fuse_in_header>() {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "dequeued request message is too short",
+                        ));
+                    }
+                    break len;
+                }
+
+                Err(err) => match err.raw_os_error() {
+                    Some(libc::ENOENT) => {
+                        tracing::debug!("ENOENT");
+                        continue;
+                    }
+                    _ => return Err(err),
+                },
+            }
+        };
+        Ok(Some(Request {
+            session: self.inner.clone(),
+            header,
+            arg: SubVec {
+                buf: arg.clone(),
+                len,
+            },
+        }))
+    }
+
     /// Receive an incoming FUSE request from the kernel.
     pub fn next_request(&self) -> io::Result<Option<Request>> {
         let mut conn = &self.inner.conn;
@@ -372,7 +423,7 @@ impl Session {
         let mut header = fuse_in_header::default();
         let mut arg = vec![0u8; self.inner.bufsize - mem::size_of::<fuse_in_header>()];
 
-        loop {
+        let len = loop {
             match conn.read_vectored(&mut [
                 io::IoSliceMut::new(header.as_bytes_mut()),
                 io::IoSliceMut::new(&mut arg[..]),
@@ -384,11 +435,8 @@ impl Session {
                             "dequeued request message is too short",
                         ));
                     }
-                    unsafe {
-                        arg.set_len(len - mem::size_of::<fuse_in_header>());
-                    }
 
-                    break;
+                    break len;
                 }
 
                 Err(err) => match err.raw_os_error() {
@@ -403,12 +451,15 @@ impl Session {
                     _ => return Err(err),
                 },
             }
-        }
+        };
 
         Ok(Some(Request {
             session: self.inner.clone(),
             header,
-            arg,
+            arg: SubVec {
+                buf: Arc::new(arg),
+                len,
+            },
         }))
     }
 
@@ -546,13 +597,24 @@ where
     ))
 }
 
+struct SubVec<T> {
+    buf: Arc<Vec<T>>,
+    len: usize,
+}
+
+impl<T> std::ops::Deref for SubVec<T> {
+    type Target = [T];
+    fn deref(&self) -> &Self::Target {
+        &self.buf[0..self.len]
+    }
+}
 // ==== Request ====
 
 /// Context about an incoming FUSE request.
 pub struct Request {
     session: Arc<SessionInner>,
     header: fuse_in_header,
-    arg: Vec<u8>,
+    arg: SubVec<u8>,
 }
 
 impl Request {
