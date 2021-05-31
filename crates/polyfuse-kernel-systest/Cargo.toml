@@ -12,6 +12,7 @@ polyfuse-kernel = { path = "../polyfuse-kernel" }
 
 [build-dependencies]
 ctest = "0.2"
+pkg-config = "0.3.19"
 
 [[test]]
 name = "test_kernel"

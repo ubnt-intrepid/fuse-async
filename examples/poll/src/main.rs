@@ -75,7 +75,7 @@ impl PollFS {
                 let mut out = AttrOut::default();
                 out.attr().ino(1);
                 out.attr().nlink(1);
-                out.attr().mode(libc::S_IFREG | 0o444);
+                out.attr().mode((libc::S_IFREG | 0o444).into());
                 out.attr().uid(unsafe { libc::getuid() });
                 out.attr().gid(unsafe { libc::getgid() });
                 out.ttl(Duration::from_secs(u64::max_value() / 2));

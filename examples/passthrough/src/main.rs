@@ -1,6 +1,8 @@
 #![allow(clippy::unnecessary_mut_passed)]
 #![warn(clippy::unimplemented, clippy::todo)]
 
+cfg_if::cfg_if! {
+if #[cfg(target_os = "linux")] {
 mod fs;
 
 use polyfuse::{
@@ -893,4 +895,10 @@ fn no_entry() -> io::Error {
 #[inline]
 fn io_to_errno(err: io::Error) -> i32 {
     err.raw_os_error().unwrap_or(libc::EIO)
+}
+
+} else {
+    // This example needs some work to build on FreeBSD
+    fn main() {}
+}
 }

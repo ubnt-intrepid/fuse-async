@@ -1,4 +1,5 @@
 use async_io::Async;
+use cfg_if::cfg_if;
 use futures::prelude::*;
 use std::{
     ffi::{CString, OsStr},
@@ -6,6 +7,14 @@ use std::{
     os::unix::prelude::*,
     path::PathBuf,
 };
+
+cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        const AT_EMPTY_PATH: i32 = libc::AT_EMPTY_PATH;
+    } else {
+        const AT_EMPTY_PATH: i32 = 0;
+    }
+}
 
 #[async_std::main]
 async fn main() -> anyhow::Result<()> {
@@ -66,7 +75,7 @@ impl FileDesc {
     fn open(path: impl AsRef<OsStr>, mut flags: libc::c_int) -> io::Result<Self> {
         let path = path.as_ref();
         if path.is_empty() {
-            flags |= libc::AT_EMPTY_PATH;
+            flags |= AT_EMPTY_PATH;
         }
         let c_path = CString::new(path.as_bytes())?;
         let fd = syscall!(open(c_path.as_ptr(), flags))?;

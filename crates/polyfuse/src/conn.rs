@@ -318,13 +318,13 @@ fn receive_fd(reader: &UnixStream) -> io::Result<RawFd> {
         msg_iov: &mut iov,
         msg_iovlen: 1,
         msg_control: cmsg.as_mut_ptr() as *mut c_void,
-        msg_controllen: mem::size_of_val(&cmsg),
+        msg_controllen: mem::size_of_val(&cmsg) as _,
         msg_flags: 0,
     };
 
     syscall! { recvmsg(reader.as_raw_fd(), &mut msg, 0) };
 
-    if msg.msg_controllen < mem::size_of_val(&cmsg) {
+    if msg.msg_controllen < mem::size_of_val(&cmsg) as _ {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "too short control message length",

@@ -8,6 +8,7 @@ use polyfuse::{
 };
 
 use anyhow::{ensure, Context as _, Result};
+use cfg_if::cfg_if;
 use dashmap::DashMap;
 use slab::Slab;
 use std::{
@@ -22,6 +23,14 @@ use std::{
     },
     time::{Duration, SystemTime},
 };
+
+cfg_if! {
+    if #[cfg(any(target_os = "freebsd", target_os = "netbsd"))] {
+        const ENOATTR: i32 = libc::ENOATTR;
+    } else {
+        const ENOATTR: i32 = libc::ENODATA;
+    }
+}
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
@@ -183,7 +192,7 @@ impl Directory {
 
         entries.push(Arc::new(DirEntry {
             name: ".".into(),
-            ino: attr.st_ino,
+            ino: attr.st_ino.into(),
             typ: libc::DT_DIR as u32,
             off: offset,
         }));
@@ -191,7 +200,7 @@ impl Directory {
 
         entries.push(Arc::new(DirEntry {
             name: "..".into(),
-            ino: self.parent.unwrap_or(attr.st_ino),
+            ino: self.parent.unwrap_or(attr.st_ino.into()),
             typ: libc::DT_DIR as u32,
             off: offset,
         }));
@@ -362,7 +371,7 @@ impl MemFS {
         }
 
         if let Some(mode) = op.mode() {
-            inode.attr.st_mode = mode;
+            inode.attr.st_mode = mode as libc::mode_t;
         }
         if let Some(uid) = op.uid() {
             inode.attr.st_uid = uid;
@@ -461,7 +470,7 @@ impl MemFS {
     }
 
     fn do_mknod(&self, req: &Request, op: op::Mknod<'_>) -> io::Result<()> {
-        match op.mode() & libc::S_IFMT {
+        match op.mode() as libc::mode_t & libc::S_IFMT {
             libc::S_IFREG => (),
             _ => return req.reply_error(libc::ENOTSUP),
         }
@@ -469,9 +478,9 @@ impl MemFS {
         self.make_node(req, op.parent(), op.name(), |entry| INode {
             attr: {
                 let mut attr = unsafe { mem::zeroed::<libc::stat>() };
-                attr.st_ino = entry.ino();
+                attr.st_ino = entry.ino() as libc::ino_t;
                 attr.st_nlink = 1;
-                attr.st_mode = op.mode();
+                attr.st_mode = op.mode() as libc::mode_t;
                 attr
             },
             xattrs: HashMap::new(),
@@ -485,9 +494,9 @@ impl MemFS {
         self.make_node(req, op.parent(), op.name(), |entry| INode {
             attr: {
                 let mut attr = unsafe { mem::zeroed::<libc::stat>() };
-                attr.st_ino = entry.ino();
+                attr.st_ino = entry.ino() as libc::ino_t;
                 attr.st_nlink = 2;
-                attr.st_mode = op.mode() | libc::S_IFDIR;
+                attr.st_mode = op.mode() as libc::mode_t | libc::S_IFDIR;
                 attr
             },
             xattrs: HashMap::new(),
@@ -504,7 +513,7 @@ impl MemFS {
         self.make_node(req, op.parent(), op.name(), |entry| INode {
             attr: {
                 let mut attr = unsafe { mem::zeroed::<libc::stat>() };
-                attr.st_ino = entry.ino();
+                attr.st_ino = entry.ino() as libc::ino_t;
                 attr.st_nlink = 1;
                 attr.st_mode = libc::S_IFLNK | 0o777;
                 attr
@@ -691,7 +700,7 @@ impl MemFS {
 
         let value = match inode.xattrs.get(op.name()) {
             Some(value) => value,
-            None => return req.reply_error(libc::ENODATA),
+            None => return req.reply_error(ENOATTR),
         };
 
         match op.size() {
@@ -710,8 +719,15 @@ impl MemFS {
     }
 
     fn do_setxattr(&self, req: &Request, op: op::Setxattr<'_>) -> io::Result<()> {
-        let create = op.flags() as i32 & libc::XATTR_CREATE != 0;
-        let replace = op.flags() as i32 & libc::XATTR_REPLACE != 0;
+        cfg_if! {
+            if #[cfg(target_os = "linux")] {
+                let create = op.flags() as i32 & libc::XATTR_CREATE != 0;
+                let replace = op.flags() as i32 & libc::XATTR_REPLACE != 0;
+            } else {
+                let create = false;
+                let replace = false;
+            }
+        }
         if create && replace {
             return req.reply_error(libc::EINVAL);
         }
@@ -731,7 +747,7 @@ impl MemFS {
             }
             Entry::Vacant(entry) => {
                 if replace {
-                    return req.reply_error(libc::ENODATA);
+                    return req.reply_error(ENOATTR);
                 }
                 if create {
                     entry.insert(Arc::default());
@@ -779,14 +795,14 @@ impl MemFS {
     fn do_removexattr(&self, req: &Request, op: op::Removexattr<'_>) -> io::Result<()> {
         let mut inode = match self.inodes.get_mut(op.ino()) {
             Some(inode) => inode,
-            None => return req.reply_error(libc::ENOENT),
+            None => return req.reply_error(ENOATTR),
         };
 
         match inode.xattrs.entry(op.name().into()) {
             Entry::Occupied(entry) => {
                 entry.remove();
             }
-            Entry::Vacant(..) => return req.reply_error(libc::ENODATA),
+            Entry::Vacant(..) => return req.reply_error(ENOATTR),
         }
 
         req.reply(())
@@ -843,9 +859,9 @@ impl MemFS {
 }
 
 fn fill_attr(attr: &mut FileAttr, st: &libc::stat) {
-    attr.ino(st.st_ino);
+    attr.ino(st.st_ino.into());
     attr.size(st.st_size as u64);
-    attr.mode(st.st_mode);
+    attr.mode(st.st_mode.into());
     attr.nlink(st.st_nlink as u32);
     attr.uid(st.st_uid);
     attr.gid(st.st_gid);

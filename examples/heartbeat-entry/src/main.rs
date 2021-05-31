@@ -52,12 +52,12 @@ fn main() -> Result<()> {
 
     let fs = {
         let mut root_attr = unsafe { mem::zeroed::<libc::stat>() };
-        root_attr.st_ino = ROOT_INO;
+        root_attr.st_ino = ROOT_INO as libc::ino_t;
         root_attr.st_mode = libc::S_IFDIR | 0o555;
         root_attr.st_nlink = 1;
 
         let mut file_attr = unsafe { mem::zeroed::<libc::stat>() };
-        file_attr.st_ino = FILE_INO;
+        file_attr.st_ino = FILE_INO as libc::ino_t;
         file_attr.st_mode = libc::S_IFREG | 0o444;
         file_attr.st_nlink = 1;
 
@@ -158,7 +158,7 @@ impl Heartbeat {
 
                     if op.name().as_bytes() == current.filename.as_bytes() {
                         let mut out = EntryOut::default();
-                        out.ino(self.file_attr.st_ino);
+                        out.ino(self.file_attr.st_ino.into());
                         fill_attr(out.attr(), &self.file_attr);
                         out.ttl_entry(self.ttl);
                         out.ttl_attr(self.ttl);
@@ -225,9 +225,9 @@ impl Heartbeat {
 }
 
 fn fill_attr(attr: &mut FileAttr, st: &libc::stat) {
-    attr.ino(st.st_ino);
+    attr.ino(st.st_ino.into());
     attr.size(st.st_size as u64);
-    attr.mode(st.st_mode);
+    attr.mode(st.st_mode.into());
     attr.nlink(st.st_nlink as u32);
     attr.uid(st.st_uid);
     attr.gid(st.st_gid);
