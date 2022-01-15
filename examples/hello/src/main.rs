@@ -3,12 +3,13 @@
 
 use polyfuse::{
     op,
-    reply::{AttrOut, EntryOut, FileAttr, ReaddirOut},
+    reply::{AttrOut, EntryOut, FileAttr, OpenOut, ReaddirOut},
     KernelConfig, Operation, Request, Session,
 };
 
 use anyhow::{ensure, Context as _, Result};
 use std::{io, os::unix::prelude::*, path::PathBuf, time::Duration};
+use tracing::warn;
 
 const TTL: Duration = Duration::from_secs(60 * 60 * 24 * 365);
 const ROOT_INO: u64 = 1;
@@ -22,7 +23,7 @@ fn main() -> Result<()> {
     let mut args = pico_args::Arguments::from_env();
 
     let mountpoint: PathBuf = args.free_from_str()?.context("missing mountpoint")?;
-    ensure!(mountpoint.is_dir(), "tmountpoint must be a directory");
+    ensure!(mountpoint.is_dir(), "mountpoint must be a directory");
 
     let session = Session::mount(mountpoint, KernelConfig::default())?;
 
@@ -34,7 +35,11 @@ fn main() -> Result<()> {
             Operation::Getattr(op) => fs.getattr(&req, op)?,
             Operation::Read(op) => fs.read(&req, op)?,
             Operation::Readdir(op) => fs.readdir(&req, op)?,
-            _ => req.reply_error(libc::ENOSYS)?,
+            Operation::Opendir(op) => fs.opendir(&req, op)?,
+            unhandled_op => {
+                warn!("Missing handler mapping for {:?} operation", unhandled_op);
+                req.reply_error(libc::ENOSYS)?
+            }
         }
     }
 
@@ -169,6 +174,12 @@ impl Hello {
             }
         }
 
+        req.reply(out)
+    }
+
+    fn opendir(&self, req: &Request, op: op::Opendir<'_>) -> io::Result<()> {
+        let mut out = OpenOut::default();
+        out.fh(op.ino());
         req.reply(out)
     }
 }
