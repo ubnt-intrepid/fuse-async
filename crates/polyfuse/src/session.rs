@@ -205,6 +205,12 @@ impl KernelConfig {
         self
     }
 
+     /// Specify that the value of max_pages should be derived from max_write.
+    pub fn max_pages(&mut self, enabled: bool) -> &mut Self {
+        self.set_init_flag(FUSE_MAX_PAGES, enabled);
+        self
+    }
+
     /// Specify that the filesystem supports `readdirplus` operations.
     pub fn readdirplus(&mut self, enabled: bool) -> &mut Self {
         self.set_init_flag(FUSE_DO_READDIRPLUS, enabled);
